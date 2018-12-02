@@ -1,19 +1,20 @@
 extern crate clap;
-use clap::{Arg, App};
+use clap::{App, Arg};
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::io::SeekFrom;
 
-fn main() -> io::Result<()>{
+fn main() -> io::Result<()> {
     let m = App::new("hdi2mo")
         .about("Convert hdi image file to a MO-compatible FAT16 file system")
-        .arg(
-            Arg::with_name("in_file").index(1))
+        .arg(Arg::with_name("in_file").index(1))
         .arg(Arg::with_name("mo_file").index(2))
-        .after_help("Longer explanation to appear after the options when \
-                     displaying the help information from --help or -h")
-    .get_matches();
+        .after_help(
+            "Longer explanation to appear after the options when \
+             displaying the help information from --help or -h",
+        )
+        .get_matches();
     let mut hdi_file = File::open(m.value_of("in_file").unwrap())?;
     let mut mo_file = File::create(m.value_of("mo_file").unwrap())?;
     let mut template_file = File::open("/home/thomas/formatted_mo.img")?;
@@ -34,10 +35,10 @@ fn main() -> io::Result<()>{
     //mo_file.write(&[0;512])?; // extra padding for 1st 1024 byte sector
     hdi_file.seek(SeekFrom::Current(0x8800))?; // skip mbr data and other trash
     hdi_file.seek(SeekFrom::Current(0x400))?; // skip fat16 header
-    // copy fat tables verbatim
+                                              // copy fat tables verbatim
     let mut fat_data = [0; 0x2000];
-  hdi_file.read(&mut fat_data)?;
-  fat_data[0] = 0xF0;
+    hdi_file.read(&mut fat_data)?;
+    fat_data[0] = 0xF0;
     mo_file.write(&fat_data)?;
     // now we need to write more garbage fat data
     //mo_file.write(&[0; 0x32600])?;
