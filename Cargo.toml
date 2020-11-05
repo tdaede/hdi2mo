@@ -5,3 +5,4 @@ authors = ["Thomas Daede <daede003@umn.edu>"]
 
 [dependencies]
 clap = "4.0"
+byteorder = "1"
