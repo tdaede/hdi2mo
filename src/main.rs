@@ -1,21 +1,21 @@
 extern crate clap;
-use clap::{Arg, App};
+use clap::{Arg, Command};
 use std::fs::File;
+use std::path::PathBuf;
 use std::io;
 use std::io::prelude::*;
 use std::io::SeekFrom;
 
 fn main() -> io::Result<()>{
-    let m = App::new("hdi2mo")
+    let m = Command::new("hdi2mo")
         .about("Convert hdi image file to a MO-compatible FAT16 file system")
-        .arg(
-            Arg::with_name("in_file").index(1))
-        .arg(Arg::with_name("mo_file").index(2))
+        .arg(Arg::new("in_file").index(1).value_parser(clap::value_parser!(PathBuf)))
+        .arg(Arg::new("mo_file").index(2).value_parser(clap::value_parser!(PathBuf)))
         .after_help("Longer explanation to appear after the options when \
                      displaying the help information from --help or -h")
     .get_matches();
-    let mut hdi_file = File::open(m.value_of("in_file").unwrap())?;
-    let mut mo_file = File::create(m.value_of("mo_file").unwrap())?;
+    let mut hdi_file = File::open(m.get_one::<PathBuf>("in_file").unwrap())?;
+    let mut mo_file = File::create(m.get_one::<PathBuf>("mo_file").unwrap())?;
     let mut template_file = File::open("/home/thomas/formatted_mo.img")?;
     hdi_file.seek(SeekFrom::Current(0x1000))?; // skip 4096 byte header
     let mut fat16_header = [0; 512];
