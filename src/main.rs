@@ -1,12 +1,42 @@
 extern crate clap;
 use clap::{Arg, Command};
 extern crate byteorder;
+extern crate binrw;
+
 use std::fs::File;
 use std::path::PathBuf;
 use std::io;
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use byteorder::{ByteOrder, LE};
+use binrw::{binrw, BinRead};
+
+#[binrw]
+#[brw(little)]
+#[derive(Debug, Copy, Clone)]
+struct PC98Partition {
+    mid: u8,
+    sid: u8,
+    dummy1: u8,
+    dummy2: u8,
+    ipl_sct: u8,
+    ipl_head: u8,
+    ipl_cyl: u16,
+    ssect: u8,
+    shd: u8,
+    scyl: u16,
+    esect: u8,
+    ehd: u8,
+    ecyl: u16,
+    name: [u8; 16],
+}
+
+#[binrw]
+#[brw(little)]
+#[derive(Debug, Copy, Clone)]
+struct PC98PartitionTable {
+    partitions: [PC98Partition; 16],
+}
 
 fn main() -> io::Result<()>{
     let m = Command::new("hdi2mo")
@@ -27,8 +57,12 @@ fn main() -> io::Result<()>{
     if (hdi_ipl[0xfe] != 0x55) || (hdi_ipl[0xff] != 0xaa) {
         panic!("Couldn't find NEC partition magic");
     }
-    let mut hdi_part_table = [0; 512];
-    hdi_file.read_exact(&mut hdi_part_table)?;
+    let hdi_part_table = PC98PartitionTable::read(&mut hdi_file).unwrap();
+    for p in hdi_part_table.partitions {
+        if p.mid != 0 {
+            println!("found partition: {:?}", std::str::from_utf8(&p.name).unwrap());
+        }
+    }
     hdi_file.seek(SeekFrom::Current(0x8400))?; // skip mbr data and other trash
     let mut hdi_fat16_header = [0; 512];
     hdi_file.read_exact(&mut hdi_fat16_header)?;
@@ -38,6 +72,7 @@ fn main() -> io::Result<()>{
     let reserved_sectors = LE::read_u16(&hdi_fat16_header[0xe..0x10]);
     let total_logical_sectors = LE::read_u16(&hdi_fat16_header[0x13..0x15]) as u32;
     let sectors_per_fat = LE::read_u16(&hdi_fat16_header[0x16..0x18]) as u32;
+    let max_root_dirents = LE::read_u16(&hdi_fat16_header[0x11..0x13]);
     let num_fats = 2;
     println!("bytes per sector: {}", bytes_per_sector);
     println!("sectors per cluster: {}", sectors_per_cluster);
@@ -47,14 +82,16 @@ fn main() -> io::Result<()>{
     println!("sectors per fat: {}", sectors_per_fat);
     let bytes_per_cluster = bytes_per_sector * sectors_per_cluster;
     println!("bytes per cluster: {}", bytes_per_cluster);
+    println!("max root dirents: {}", max_root_dirents);
 
-    let mo_bytes_per_sector = 1024;
+    let mo_bytes_per_sector = bytes_per_sector;
     let mo_total_logical_sectors = total_logical_sectors * bytes_per_sector / mo_bytes_per_sector;
     let mo_sectors_per_fat = (sectors_per_fat * bytes_per_sector / mo_bytes_per_sector) as u16;
 
     LE::write_u16(&mut fat16_header[0xb..0xd], mo_bytes_per_sector as u16);
     fat16_header[0x0D] = (bytes_per_cluster / mo_bytes_per_sector) as u8; // sectors per cluster
     //fat16_header[0x10] = 0x01; // one FAT
+    LE::write_u16(&mut fat16_header[0x11..0x13], max_root_dirents);
     //fat16_header[0x16] = 0x08; // sectors in FAT
     //fat16_header[0x17] = 0x00;
     LE::write_u16(&mut fat16_header[0x16..0x18], mo_sectors_per_fat);
