@@ -14,6 +14,20 @@ use binrw::{binrw, BinRead};
 #[binrw]
 #[brw(little)]
 #[derive(Debug, Copy, Clone)]
+struct HDIHeader {
+    reserved: u32,
+    pda: u32,
+    header_size: u32,
+    data_size: u32,
+    bytes_per_sector: u32,
+    sectors: u32,
+    heads: u32,
+    cylinders: u32,
+}
+
+#[binrw]
+#[brw(little)]
+#[derive(Debug, Copy, Clone)]
 struct PC98Partition {
     mid: u8,
     sid: u8,
@@ -49,7 +63,8 @@ fn main() -> io::Result<()>{
     let mut hdi_file = File::open(m.get_one::<PathBuf>("in_file").unwrap())?;
     let mut mo_file = File::create(m.get_one::<PathBuf>("mo_file").unwrap())?;
     let mut template_file = File::open("/home/thomas/sandbox/hdi2mo/formatted_mo.img")?;
-    hdi_file.seek(SeekFrom::Current(0x1000))?; // skip 4096 byte header
+    let hdi_header = HDIHeader::read(&mut hdi_file).unwrap();
+    hdi_file.seek(SeekFrom::Start(hdi_header.header_size as u64))?;
     let mut fat16_header = [0; 512];
     template_file.read_exact(&mut fat16_header)?;
     let mut hdi_ipl = [0; 512];
@@ -63,7 +78,12 @@ fn main() -> io::Result<()>{
             println!("found partition: {:?}", std::str::from_utf8(&p.name).unwrap());
         }
     }
-    hdi_file.seek(SeekFrom::Current(0x8400))?; // skip mbr data and other trash
+    let p = hdi_part_table.partitions[0];
+    hdi_file.seek(SeekFrom::Start(hdi_header.header_size as u64
+                                  + ((p.scyl as u64 * hdi_header.heads as u64 + p.shd as u64)
+                                     * hdi_header.sectors as u64 + p.ssect as u64)
+                                  * hdi_header.bytes_per_sector as u64
+    ))?;
     let mut hdi_fat16_header = [0; 512];
     hdi_file.read_exact(&mut hdi_fat16_header)?;
 
