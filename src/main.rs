@@ -69,6 +69,7 @@ struct BIOSParameterBlock {
 fn main() -> io::Result<()>{
     let m = Command::new("hdi2mo")
         .about("Convert hdi image file to a MO-compatible FAT16 file system")
+        .arg(Arg::new("mo_template").short('t').value_parser(clap::value_parser!(PathBuf)))
         .arg(Arg::new("in_file").index(1).value_parser(clap::value_parser!(PathBuf)))
         .arg(Arg::new("mo_file").index(2).value_parser(clap::value_parser!(PathBuf)))
         .after_help("Longer explanation to appear after the options when \
@@ -76,7 +77,7 @@ fn main() -> io::Result<()>{
     .get_matches();
     let mut hdi_file = File::open(m.get_one::<PathBuf>("in_file").unwrap())?;
     let mut mo_file = File::create(m.get_one::<PathBuf>("mo_file").unwrap())?;
-    let mut template_file = File::open("/home/thomas/sandbox/hdi2mo/formatted_mo.img")?;
+    let mut template_file = File::open(m.get_one::<PathBuf>("mo_template").unwrap())?;
     let hdi_header = HDIHeader::read(&mut hdi_file).unwrap();
     hdi_file.seek(SeekFrom::Start(hdi_header.header_size as u64))?;
     let mut fat16_header = [0; 512];
