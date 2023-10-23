@@ -9,7 +9,7 @@ use std::io;
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use byteorder::{ByteOrder, LE};
-use binrw::{binrw, BinRead};
+use binrw::{binrw, BinRead, BinWrite};
 
 #[binrw]
 #[brw(little)]
@@ -120,19 +120,17 @@ fn main() -> io::Result<()>{
     let mo_total_logical_sectors = bpb.total_logical_sectors as u64 * bpb.bytes_per_sector as u64 / mo_bytes_per_sector as u64;
     let mo_sectors_per_fat = (bpb.sectors_per_fat * bpb.bytes_per_sector / mo_bytes_per_sector) as u16;
 
-    LE::write_u16(&mut fat16_header[0xb..0xd], mo_bytes_per_sector as u16);
-    fat16_header[0x0D] = (bytes_per_cluster / mo_bytes_per_sector as usize) as u8; // sectors per cluster
-    //fat16_header[0x10] = 0x01; // one FAT
-    LE::write_u16(&mut fat16_header[0x11..0x13], bpb.max_root_dirents);
-    //fat16_header[0x16] = 0x08; // sectors in FAT
-    //fat16_header[0x17] = 0x00;
-    LE::write_u16(&mut fat16_header[0x16..0x18], mo_sectors_per_fat);
-    //fat16_header[0x20] = 0xd1;
-    //fat16_header[0x21] = 0x22;
-    //fat16_header[0x22] = 0x00;
-    //fat16_header[0x23] = 0x00;
+    let mut mo_bpb = t_bpb.clone();
+
+    mo_bpb.bytes_per_sector = mo_bytes_per_sector as u16;
+    mo_bpb.sectors_per_cluster = (bytes_per_cluster / mo_bytes_per_sector as usize) as u8;
+    mo_bpb.max_root_dirents = bpb.max_root_dirents;
+    mo_bpb.sectors_per_fat = mo_sectors_per_fat;
     LE::write_u32(&mut fat16_header[0x20..0x24], mo_total_logical_sectors as u32);
     mo_file.write(&fat16_header)?;
+    mo_file.seek(SeekFrom::Start(0x0b))?;
+    mo_bpb.write(&mut mo_file).unwrap();
+    mo_file.seek(SeekFrom::Start(512))?;
     // skip past first reserved sector
     hdi_file.seek(SeekFrom::Start(bpb.reserved_sectors as u64 * bpb.bytes_per_sector as u64 + p_start_offset))?;
     // write reserved sector if necessary
