@@ -1,6 +1,5 @@
 extern crate clap;
 use clap::{Arg, Command};
-extern crate byteorder;
 extern crate binrw;
 
 use std::fs::File;
@@ -8,7 +7,6 @@ use std::path::PathBuf;
 use std::io;
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use byteorder::{ByteOrder, LE};
 use binrw::{binrw, BinRead, BinWrite};
 
 #[binrw]
@@ -64,6 +62,10 @@ struct BIOSParameterBlock {
     total_logical_sectors: u16,
     media_id: u8,
     sectors_per_fat: u16,
+    sectors_per_track: u16,
+    heads: u16,
+    hidden_sectors: u32,
+    total_logical_sectors_u32: u32,
 }
 
 fn main() -> io::Result<()>{
@@ -126,10 +128,11 @@ fn main() -> io::Result<()>{
     mo_bpb.sectors_per_cluster = (bytes_per_cluster / mo_bytes_per_sector as usize) as u8;
     mo_bpb.max_root_dirents = bpb.max_root_dirents;
     mo_bpb.sectors_per_fat = mo_sectors_per_fat;
-    LE::write_u32(&mut fat16_header[0x20..0x24], mo_total_logical_sectors as u32);
+    mo_bpb.total_logical_sectors_u32 = mo_total_logical_sectors as u32;
     mo_file.write(&fat16_header)?;
     mo_file.seek(SeekFrom::Start(0x0b))?;
     mo_bpb.write(&mut mo_file).unwrap();
+    println!("{:?}", mo_bpb);
     mo_file.seek(SeekFrom::Start(512))?;
     // skip past first reserved sector
     hdi_file.seek(SeekFrom::Start(bpb.reserved_sectors as u64 * bpb.bytes_per_sector as u64 + p_start_offset))?;
