@@ -82,6 +82,8 @@ fn main() -> io::Result<()>{
     hdi_file.seek(SeekFrom::Start(hdi_header.header_size as u64))?;
     let mut fat16_header = [0; 512];
     template_file.read_exact(&mut fat16_header)?;
+    template_file.seek(SeekFrom::Start(0x0b))?;
+    let t_bpb = BIOSParameterBlock::read(&mut template_file).unwrap();
     let mut hdi_ipl = [0; 512];
     hdi_file.read_exact(&mut hdi_ipl)?;
     if (hdi_ipl[0xfe] != 0x55) || (hdi_ipl[0xff] != 0xaa) {
@@ -106,17 +108,15 @@ fn main() -> io::Result<()>{
 
     let bpb = BIOSParameterBlock::read(&mut hdi_file).unwrap();
 
-    println!("bytes per sector: {}", bpb.bytes_per_sector);
-    println!("sectors per cluster: {}", bpb.sectors_per_cluster);
-    println!("reserved sectors: {}", bpb.reserved_sectors);
+    println!("{:?}", bpb);
+    let bytes_per_cluster = bpb.bytes_per_sector as usize * bpb.sectors_per_cluster as usize;
     assert_eq!(bpb.reserved_sectors, 1);
-    println!("total logical sectors: {}", bpb.total_logical_sectors);
-    println!("sectors per fat: {}", bpb.sectors_per_fat);
-    let bytes_per_cluster = bpb.bytes_per_sector as usize* bpb.sectors_per_cluster as usize;
+    assert_eq!(bpb.num_fats, 2);
     println!("bytes per cluster: {}", bytes_per_cluster);
-    println!("max root dirents: {}", bpb.max_root_dirents);
 
-    let mo_bytes_per_sector = bpb.bytes_per_sector;
+    println!("{:?}", t_bpb);
+
+    let mo_bytes_per_sector = t_bpb.bytes_per_sector;
     let mo_total_logical_sectors = bpb.total_logical_sectors as u64 * bpb.bytes_per_sector as u64 / mo_bytes_per_sector as u64;
     let mo_sectors_per_fat = (bpb.sectors_per_fat * bpb.bytes_per_sector / mo_bytes_per_sector) as u16;
 
