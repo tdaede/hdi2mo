@@ -96,7 +96,7 @@ fn main() -> io::Result<()>{
     let hdi_part_table = PC98PartitionTable::read(&mut hdi_file).unwrap();
     for p in hdi_part_table.partitions {
         if p.mid != 0 {
-            println!("found partition: {:?}", std::str::from_utf8(&p.name).unwrap());
+            println!("found partition: {:?}", String::from_utf8_lossy(&p.name));
         }
     }
     let p = hdi_part_table.partitions[0];
