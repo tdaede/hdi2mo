@@ -174,7 +174,7 @@ fn main() -> io::Result<()>{
     hdi_file.seek(SeekFrom::Start(512 + p_start_offset))?;
     // read remaining bytes of reserved sectors and write them to mo
     let mut reserved_bytes = vec![0; mo_reserved_bytes as usize - 512];
-    hdi_file.read(&mut reserved_bytes)?;
+    hdi_file.read_exact(&mut reserved_bytes)?;
     mo_file.write(&reserved_bytes)?;
     // copy fat tables verbatim
     let mut fat_data = vec![0; bpb.num_fats as usize * bpb.sectors_per_fat as usize * bpb.bytes_per_sector as usize];
