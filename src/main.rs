@@ -87,7 +87,7 @@ fn main() -> io::Result<()>{
     let hdi_header = HDIHeader::read(&mut hdi_file).unwrap();
     hdi_file.seek(SeekFrom::Start(hdi_header.header_size as u64))?;
     let mut fat16_header = [0; 512];
-    let mut hdi_ipl = [0; 512];
+    let mut hdi_ipl = vec![0; hdi_header.bytes_per_sector as usize];
     hdi_file.read_exact(&mut hdi_ipl)?;
     if (hdi_ipl[0xfe] != 0x55) || (hdi_ipl[0xff] != 0xaa) {
         panic!("Couldn't find NEC partition magic");
