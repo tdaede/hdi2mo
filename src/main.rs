@@ -155,6 +155,7 @@ fn main() -> io::Result<()>{
     let mo_bytes_per_sector = t_bpb.bytes_per_sector;
     let mo_total_logical_sectors = bpb.total_logical_sectors as u64 * bpb.bytes_per_sector as u64 / mo_bytes_per_sector as u64;
     let mo_sectors_per_fat = (bpb.sectors_per_fat * bpb.bytes_per_sector / mo_bytes_per_sector) as u16;
+    let mo_reserved_bytes = bpb.bytes_per_sector as u64 * bpb.reserved_sectors as u64;
 
     let mut mo_bpb = t_bpb.clone();
 
@@ -163,15 +164,17 @@ fn main() -> io::Result<()>{
     mo_bpb.max_root_dirents = bpb.max_root_dirents;
     mo_bpb.sectors_per_fat = mo_sectors_per_fat;
     mo_bpb.total_logical_sectors_u32 = mo_total_logical_sectors as u32;
+    mo_bpb.reserved_sectors = (mo_reserved_bytes / mo_bytes_per_sector as u64) as u16;
     mo_file.write(&fat16_header)?;
     mo_file.seek(SeekFrom::Start(0x0b))?;
     mo_bpb.write(&mut mo_file).unwrap();
     println!("{:?}", mo_bpb);
     mo_file.seek(SeekFrom::Start(512))?;
-    // skip past first reserved sector
-    hdi_file.seek(SeekFrom::Start(bpb.reserved_sectors as u64 * bpb.bytes_per_sector as u64 + p_start_offset))?;
-    // write reserved sector if necessary
-    let reserved_bytes = vec![0; bpb.reserved_sectors as usize * mo_bytes_per_sector as usize - 512];
+    // skip past first 512 bytes
+    hdi_file.seek(SeekFrom::Start(512 + p_start_offset))?;
+    // read remaining bytes of reserved sectors and write them to mo
+    let mut reserved_bytes = vec![0; mo_reserved_bytes as usize - 512];
+    hdi_file.read(&mut reserved_bytes)?;
     mo_file.write(&reserved_bytes)?;
     // copy fat tables verbatim
     let mut fat_data = vec![0; bpb.num_fats as usize * bpb.sectors_per_fat as usize * bpb.bytes_per_sector as usize];
