@@ -79,13 +79,14 @@ fn main() -> io::Result<()>{
     .get_matches();
     let mut hdi_file = File::open(m.get_one::<PathBuf>("in_file").unwrap())?;
     let mut mo_file = File::create(m.get_one::<PathBuf>("mo_file").unwrap())?;
-    let mut template_file = File::open(m.get_one::<PathBuf>("mo_template").unwrap())?;
+    let mut template_file = if let Some(mo_template_path) = m.get_one::<PathBuf>("mo_template") {
+        Some(File::open(mo_template_path)?)
+    } else {
+        None
+    };
     let hdi_header = HDIHeader::read(&mut hdi_file).unwrap();
     hdi_file.seek(SeekFrom::Start(hdi_header.header_size as u64))?;
     let mut fat16_header = [0; 512];
-    template_file.read_exact(&mut fat16_header)?;
-    template_file.seek(SeekFrom::Start(0x0b))?;
-    let t_bpb = BIOSParameterBlock::read(&mut template_file).unwrap();
     let mut hdi_ipl = [0; 512];
     hdi_file.read_exact(&mut hdi_ipl)?;
     if (hdi_ipl[0xfe] != 0x55) || (hdi_ipl[0xff] != 0xaa) {
@@ -116,6 +117,39 @@ fn main() -> io::Result<()>{
     assert_eq!(bpb.num_fats, 2);
     println!("bytes per cluster: {}", bytes_per_cluster);
 
+    let t_bpb = if let Some(t) = &mut template_file {
+        t.read_exact(&mut fat16_header)?;
+        t.seek(SeekFrom::Start(0x0b))?;
+        BIOSParameterBlock::read(t).unwrap()
+    } else {
+        fat16_header = hdi_fat16_header;
+        // todo: not all of these are required
+        fat16_header[0x8] = b'5';
+        fat16_header[0xa] = b'0';
+        fat16_header[0x25] = 1;
+        fat16_header[0x3a] = b'6';
+        fat16_header[0x3e] = 0;
+        fat16_header[0x42] = 0x07;
+        fat16_header[0x43] = 0x02;
+        fat16_header[0x1fe] = 0x55;
+        fat16_header[0x1ff] = 0xaa;
+
+        // default values for a 128MB MO
+        BIOSParameterBlock {
+            bytes_per_sector: 512,
+            sectors_per_cluster: 4,
+            reserved_sectors: 1,
+            num_fats: 2,
+            max_root_dirents: 512,
+            total_logical_sectors: 0,
+            media_id: 240,
+            sectors_per_fat: 243,
+            sectors_per_track: 25,
+            heads: 1,
+            hidden_sectors: 0,
+            total_logical_sectors_u32: 248800
+        }
+    };
     println!("{:?}", t_bpb);
 
     let mo_bytes_per_sector = t_bpb.bytes_per_sector;
