@@ -66,6 +66,16 @@ struct BIOSParameterBlock {
     heads: u16,
     hidden_sectors: u32,
     total_logical_sectors_u32: u32,
+    physical_drive_number: u8,
+    reserved_1: u8,
+    extended_signature: u8,
+    volume_id: [u8; 4],
+    volume_label: [u8; 11],
+    file_system_type: [u8; 8],
+    nec_extra_reserved_sectors: u16,
+    nec_cylinder_head: u16,
+    nec_sector_offset_to_iosys: u16,
+    nec_physical_sector_size: u16,
 }
 
 fn main() -> io::Result<()>{
@@ -147,10 +157,26 @@ fn main() -> io::Result<()>{
             sectors_per_track: 25,
             heads: 1,
             hidden_sectors: 0,
-            total_logical_sectors_u32: 248800
+            total_logical_sectors_u32: 248800,
+            physical_drive_number: 0,
+            reserved_1: bpb.reserved_1,
+            extended_signature: bpb.extended_signature,
+            volume_id: bpb.volume_id,
+            volume_label: bpb.volume_label,
+            file_system_type: bpb.file_system_type,
+            nec_extra_reserved_sectors: 0,
+            nec_cylinder_head: 0,
+            nec_sector_offset_to_iosys: 0,
+            nec_physical_sector_size: 512,
         }
     };
     println!("{:?}", t_bpb);
+
+    let hdi_iosys_head = bpb.nec_cylinder_head & 0xff;
+    let hdi_iosys_cylinder = bpb.nec_cylinder_head >> 8;
+    let hdi_iosys_offset = ((hdi_iosys_cylinder as u64 * hdi_header.heads as u64 + hdi_iosys_head as u64)
+                                     * hdi_header.sectors as u64 + bpb.nec_sector_offset_to_iosys as u64 + bpb.nec_extra_reserved_sectors as u64)
+                                  * hdi_header.bytes_per_sector as u64;
 
     let mo_bytes_per_sector = t_bpb.bytes_per_sector;
     let mo_total_logical_sectors = bpb.total_logical_sectors as u64 * bpb.bytes_per_sector as u64 / mo_bytes_per_sector as u64;
@@ -165,7 +191,9 @@ fn main() -> io::Result<()>{
     mo_bpb.sectors_per_fat = mo_sectors_per_fat;
     mo_bpb.total_logical_sectors_u32 = mo_total_logical_sectors as u32;
     mo_bpb.reserved_sectors = (mo_reserved_bytes / mo_bytes_per_sector as u64) as u16;
-    mo_file.write(&fat16_header)?;
+    mo_bpb.nec_extra_reserved_sectors = 0;
+    mo_bpb.nec_sector_offset_to_iosys = ((hdi_iosys_offset - p_start_offset + hdi_header.header_size as u64) / mo_bpb.nec_physical_sector_size as u64) as u16;
+    mo_file.write_all(&fat16_header)?;
     mo_file.seek(SeekFrom::Start(0x0b))?;
     mo_bpb.write(&mut mo_file).unwrap();
     println!("{:?}", mo_bpb);
@@ -175,16 +203,16 @@ fn main() -> io::Result<()>{
     // read remaining bytes of reserved sectors and write them to mo
     let mut reserved_bytes = vec![0; mo_reserved_bytes as usize - 512];
     hdi_file.read_exact(&mut reserved_bytes)?;
-    mo_file.write(&reserved_bytes)?;
+    mo_file.write_all(&reserved_bytes)?;
     // copy fat tables verbatim
     let mut fat_data = vec![0; bpb.num_fats as usize * bpb.sectors_per_fat as usize * bpb.bytes_per_sector as usize];
     hdi_file.read_exact(&mut fat_data)?;
     //fat_data[0] = 0xF0;
-    mo_file.write(&fat_data)?;
+    mo_file.write_all(&fat_data)?;
     // finally write directory and file data
     let mut clusters = vec![];
     hdi_file.read_to_end(&mut clusters)?;
-    mo_file.write(&clusters)?;
+    mo_file.write_all(&clusters)?;
     mo_file.sync_all()?;
     Ok(())
 }
