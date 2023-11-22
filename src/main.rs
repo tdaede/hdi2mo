@@ -123,7 +123,6 @@ fn main() -> io::Result<()>{
 
     println!("{:?}", bpb);
     let bytes_per_cluster = bpb.bytes_per_sector as usize * bpb.sectors_per_cluster as usize;
-    assert_eq!(bpb.reserved_sectors, 1);
     assert_eq!(bpb.num_fats, 2);
     println!("bytes per cluster: {}", bytes_per_cluster);
 
