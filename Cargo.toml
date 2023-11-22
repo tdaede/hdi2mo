@@ -1,6 +1,6 @@
 [package]
 name = "hdi2mo"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Thomas Daede <daede003@umn.edu>"]
 edition = "2021"
 
